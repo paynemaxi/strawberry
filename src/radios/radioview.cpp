@@ -29,6 +29,7 @@
 
 #include "core/mimedata.h"
 #include "core/iconloader.h"
+#include "core/song.h"
 #include "radiomodel.h"
 #include "radioview.h"
 #include "radioservice.h"
@@ -36,6 +37,11 @@
 #include "collection/collectionitemdelegate.h"
 
 using namespace Qt::Literals::StringLiterals;
+
+namespace {
+constexpr char kByCitiesState[] = "__by_cities__";
+constexpr char kOthersState[] = "__others__";
+}
 
 RadioView::RadioView(QWidget *parent)
     : AutoExpandingTreeView(parent),
@@ -52,6 +58,8 @@ RadioView::RadioView(QWidget *parent)
   setAttribute(Qt::WA_MacShowFocusRect, false);
   setSelectionMode(QAbstractItemView::ExtendedSelection);
 
+  QObject::connect(this, &QTreeView::expanded, this, &RadioView::ItemExpanded);
+
 }
 
 RadioView::~RadioView() { delete menu_; }
@@ -63,6 +71,29 @@ void RadioView::showEvent(QShowEvent *e) {
   if (!initialized_) {
     Q_EMIT GetChannels();
     initialized_ = true;
+  }
+
+}
+
+void RadioView::ItemExpanded(const QModelIndex &idx) {
+
+  if (!idx.isValid()) return;
+  if (idx.data(RadioModel::Role_Source).value<Song::Source>() != Song::Source::RadioBrowser) return;
+  if (idx.data(RadioModel::Role_Type).value<RadioItem::Type>() != RadioItem::Type::Group) return;
+  if (idx.data(RadioModel::Role_Loaded).toBool()) return;
+
+  const QString country = idx.data(RadioModel::Role_Country).toString();
+  const QString state = idx.data(RadioModel::Role_State).toString();
+  if (country.isEmpty()) return;
+
+  if (state == QLatin1String(kByCitiesState)) {
+    Q_EMIT GetRadioBrowserStates(country);
+  }
+  else if (state == QLatin1String(kOthersState)) {
+    Q_EMIT GetRadioBrowserStations(country, state);
+  }
+  else {
+    Q_EMIT GetRadioBrowserStations(country, state);
   }
 
 }

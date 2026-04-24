@@ -57,6 +57,9 @@ class RadioModel : public SimpleTreeModel<RadioItem> {
     Role_Url,
     Role_Homepage,
     Role_Donate,
+    Role_Country,
+    Role_State,
+    Role_Loaded,
     RoleCount
   };
 
@@ -69,9 +72,18 @@ class RadioModel : public SimpleTreeModel<RadioItem> {
   QVariant data(const RadioItem *item, int role) const;
 
   void Reset();
+  void AddService(const Song::Source source);
+  void AddRadioBrowserCountries(const QStringList &countries);
+  void AddRadioBrowserStates(const QString &country, const QStringList &states);
   void AddChannels(const RadioChannelList &channels);
 
  private:
+  RadioItem *AddLoadingIndicator(RadioItem *parent);
+  void ClearLoadingIndicator(RadioItem *parent);
+  RadioItem *AddRadioBrowserCountry(const QString &country);
+  RadioItem *AddRadioBrowserState(const QString &country, const QString &state);
+  RadioItem *AddGroup(RadioItem *parent, const QString &key, const Song::Source source, const QString &display_text, const QString &sort_text);
+  void AddRadioBrowserChannel(const RadioChannel &channel);
   bool IsPlayable(const QModelIndex &idx) const;
   bool CompareItems(const RadioItem *a, const RadioItem *b) const;
   void GetChildSongs(RadioItem *item, QList<QUrl> *urls, SongList *songs) const;
@@ -93,6 +105,7 @@ class RadioModel : public SimpleTreeModel<RadioItem> {
   const SharedPtr<RadioServices> radio_services_;
 
   QMap<Song::Source, RadioItem*> container_nodes_;
+  QMap<QString, RadioItem*> group_nodes_;
   QList<RadioItem*> items_;
   QMap<quint64, ItemAndCacheKey> pending_art_;
   QSet<QString> pending_cache_keys_;

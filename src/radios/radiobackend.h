@@ -21,6 +21,7 @@
 #define RADIOBACKEND_H
 
 #include <QObject>
+#include <QStringList>
 
 #include "includes/shared_ptr.h"
 #include "radiochannel.h"
@@ -40,14 +41,21 @@ class RadioBackend : public QObject {
   void AddChannelsAsync(const RadioChannelList &channels);
   void GetChannelsAsync();
   void DeleteChannelsAsync();
+  void AddRadioBrowserCountriesAsync(const QStringList &countries);
+  void GetRadioBrowserCountriesAsync();
+  void DeleteRadioBrowserCountriesAsync();
 
  private Q_SLOTS:
   void AddChannels(const RadioChannelList &channels);
   void GetChannels();
   void DeleteChannels();
+  void AddRadioBrowserCountries(const QStringList &countries);
+  void GetRadioBrowserCountries();
+  void DeleteRadioBrowserCountries();
 
  Q_SIGNALS:
   void NewChannels(const RadioChannelList &channels);
+  void RadioBrowserCountries(const QStringList &countries);
   void ExitFinished();
 
  private Q_SLOTS:

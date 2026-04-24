@@ -103,6 +103,7 @@ void ScrobblerSettingsPage::Load() {
   ui_->checkbox_source_stream->setChecked(scrobbler_->sources().contains(Song::Source::Stream));
   ui_->checkbox_source_somafm->setChecked(scrobbler_->sources().contains(Song::Source::SomaFM));
   ui_->checkbox_source_radioparadise->setChecked(scrobbler_->sources().contains(Song::Source::RadioParadise));
+  ui_->checkbox_source_radiobrowser->setChecked(scrobbler_->sources().contains(Song::Source::RadioBrowser));
   ui_->checkbox_source_unknown->setChecked(scrobbler_->sources().contains(Song::Source::Unknown));
 
   ui_->checkbox_lastfm_enable->setChecked(lastfmscrobbler_->enabled());
@@ -144,6 +145,7 @@ void ScrobblerSettingsPage::Save() {
   if (ui_->checkbox_source_stream->isChecked()) sources << Song::TextForSource(Song::Source::Stream);
   if (ui_->checkbox_source_somafm->isChecked()) sources << Song::TextForSource(Song::Source::SomaFM);
   if (ui_->checkbox_source_radioparadise->isChecked()) sources << Song::TextForSource(Song::Source::RadioParadise);
+  if (ui_->checkbox_source_radiobrowser->isChecked()) sources << Song::TextForSource(Song::Source::RadioBrowser);
   if (ui_->checkbox_source_unknown->isChecked()) sources << Song::TextForSource(Song::Source::Unknown);
 
   s.setValue(kSources, sources);

@@ -793,6 +793,8 @@ MainWindow::MainWindow(Application *app,
 
   QObject::connect(radio_view_, &RadioViewContainer::Refresh, &*app_->radio_services(), &RadioServices::RefreshChannels);
   QObject::connect(radio_view_->view(), &RadioView::GetChannels, &*app_->radio_services(), &RadioServices::GetChannels);
+  QObject::connect(radio_view_->view(), &RadioView::GetRadioBrowserStates, &*app_->radio_services(), &RadioServices::GetRadioBrowserStates);
+  QObject::connect(radio_view_->view(), &RadioView::GetRadioBrowserStations, &*app_->radio_services(), &RadioServices::GetRadioBrowserStations);
   QObject::connect(radio_view_->view(), &RadioView::AddToPlaylistSignal, this, &MainWindow::AddToPlaylist);
 
   // Playlist menu

@@ -22,6 +22,7 @@
 #include <QThread>
 #include <QMutexLocker>
 #include <QSqlDatabase>
+#include <QStringList>
 
 #include "includes/shared_ptr.h"
 #include "core/database.h"
@@ -69,13 +70,15 @@ void RadioBackend::AddChannels(const RadioChannelList &channels) {
   QSqlDatabase db(db_->Connect());
 
   SqlQuery q(db);
-  q.prepare(u"INSERT INTO radio_channels (source, name, url, thumbnail_url) VALUES (:source, :name, :url, :thumbnail_url)"_s);
+  q.prepare(u"INSERT INTO radio_channels (source, name, url, thumbnail_url, country, state) VALUES (:source, :name, :url, :thumbnail_url, :country, :state)"_s);
 
   for (const RadioChannel &channel : channels) {
     q.BindValue(u":source"_s, static_cast<int>(channel.source));
     q.BindValue(u":name"_s, channel.name);
     q.BindValue(u":url"_s, channel.url);
     q.BindValue(u":thumbnail_url"_s, channel.thumbnail_url);
+    q.BindValue(u":country"_s, channel.country);
+    q.BindValue(u":state"_s, channel.state);
     if (!q.Exec()) {
       db_->ReportErrors(q);
       return;
@@ -98,7 +101,7 @@ void RadioBackend::GetChannels() {
   QSqlDatabase db(db_->Connect());
 
   SqlQuery q(db);
-  q.prepare(u"SELECT source, name, url, thumbnail_url FROM radio_channels"_s);
+  q.prepare(u"SELECT source, name, url, thumbnail_url, country, state FROM radio_channels"_s);
 
   if (!q.Exec()) {
     db_->ReportErrors(q);
@@ -112,6 +115,8 @@ void RadioBackend::GetChannels() {
     channel.name = q.value(1).toString();
     channel.url.setUrl(q.value(2).toString());
     channel.thumbnail_url.setUrl(q.value(3).toString());
+    channel.country = q.value(4).toString();
+    channel.state = q.value(5).toString();
     channels << channel;
   }
 
@@ -130,6 +135,81 @@ void RadioBackend::DeleteChannels() {
 
   SqlQuery q(db);
   q.prepare(u"DELETE FROM radio_channels"_s);
+
+  if (!q.Exec()) {
+    db_->ReportErrors(q);
+  }
+
+}
+
+void RadioBackend::AddRadioBrowserCountriesAsync(const QStringList &countries) {
+  QMetaObject::invokeMethod(this, "AddRadioBrowserCountries", Qt::QueuedConnection, Q_ARG(QStringList, countries));
+}
+
+void RadioBackend::AddRadioBrowserCountries(const QStringList &countries) {
+
+  QMutexLocker l(db_->Mutex());
+  QSqlDatabase db(db_->Connect());
+
+  SqlQuery delete_q(db);
+  delete_q.prepare(u"DELETE FROM radio_browser_countries"_s);
+  if (!delete_q.Exec()) {
+    db_->ReportErrors(delete_q);
+    return;
+  }
+
+  SqlQuery q(db);
+  q.prepare(u"INSERT INTO radio_browser_countries (name) VALUES (:name)"_s);
+
+  for (const QString &country : countries) {
+    q.BindValue(u":name"_s, country);
+    if (!q.Exec()) {
+      db_->ReportErrors(q);
+      return;
+    }
+  }
+
+  Q_EMIT RadioBrowserCountries(countries);
+
+}
+
+void RadioBackend::GetRadioBrowserCountriesAsync() {
+  QMetaObject::invokeMethod(this, &RadioBackend::GetRadioBrowserCountries, Qt::QueuedConnection);
+}
+
+void RadioBackend::GetRadioBrowserCountries() {
+
+  QMutexLocker l(db_->Mutex());
+  QSqlDatabase db(db_->Connect());
+
+  SqlQuery q(db);
+  q.prepare(u"SELECT name FROM radio_browser_countries ORDER BY name"_s);
+
+  if (!q.Exec()) {
+    db_->ReportErrors(q);
+    return;
+  }
+
+  QStringList countries;
+  while (q.next()) {
+    countries << q.value(0).toString();
+  }
+
+  Q_EMIT RadioBrowserCountries(countries);
+
+}
+
+void RadioBackend::DeleteRadioBrowserCountriesAsync() {
+  QMetaObject::invokeMethod(this, &RadioBackend::DeleteRadioBrowserCountries, Qt::QueuedConnection);
+}
+
+void RadioBackend::DeleteRadioBrowserCountries() {
+
+  QMutexLocker l(db_->Mutex());
+  QSqlDatabase db(db_->Connect());
+
+  SqlQuery q(db);
+  q.prepare(u"DELETE FROM radio_browser_countries"_s);
 
   if (!q.Exec()) {
     db_->ReportErrors(q);

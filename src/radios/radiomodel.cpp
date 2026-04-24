@@ -42,6 +42,8 @@ using namespace Qt::Literals::StringLiterals;
 
 namespace {
 constexpr int kTreeIconSize = 22;
+constexpr char kByCitiesState[] = "__by_cities__";
+constexpr char kOthersState[] = "__others__";
 }
 
 RadioModel::RadioModel(const SharedPtr<AlbumCoverLoader> albumcover_loader, const SharedPtr<RadioServices> radio_services, QObject *parent)
@@ -63,6 +65,7 @@ Qt::ItemFlags RadioModel::flags(const QModelIndex &idx) const {
 
   switch (IndexToItem(idx)->type) {
     case RadioItem::Type::Service:
+    case RadioItem::Type::Group:
     case RadioItem::Type::Channel:
       return Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsDragEnabled;
     case RadioItem::Type::Root:
@@ -118,6 +121,15 @@ QVariant RadioModel::data(const RadioItem *item, int role) const {
       if (service) return service->Donate();
       break;
     }
+    case Role_Country:
+      return item->channel.country;
+      break;
+    case Role_State:
+      return item->channel.state;
+      break;
+    case Role_Loaded:
+      return item->loaded;
+      break;
     default:
       return QVariant();
   }
@@ -151,6 +163,7 @@ void RadioModel::Reset() {
 
   beginResetModel();
   container_nodes_.clear();
+  group_nodes_.clear();
   items_.clear();
   pending_art_.clear();
   pending_cache_keys_.clear();
@@ -160,23 +173,86 @@ void RadioModel::Reset() {
 
 }
 
+RadioItem *RadioModel::AddLoadingIndicator(RadioItem *parent) {
+
+  beginInsertRows(ItemToIndex(parent), static_cast<int>(parent->children.count()), static_cast<int>(parent->children.count()));
+  RadioItem *item = new RadioItem(RadioItem::Type::LoadingIndicator, parent);
+  item->source = parent->source;
+  item->display_text = tr("Loading...");
+  item->sort_text = " loading"_L1;
+  endInsertRows();
+
+  return item;
+
+}
+
+void RadioModel::ClearLoadingIndicator(RadioItem *parent) {
+
+  for (int i = 0; i < parent->children.count(); ++i) {
+    if (parent->children[i]->type == RadioItem::Type::LoadingIndicator) {
+      beginRemoveRows(ItemToIndex(parent), i, i);
+      delete parent->children.takeAt(i);
+      for (int row = i; row < parent->children.count(); ++row) {
+        parent->children[row]->row = row;
+      }
+      endRemoveRows();
+      return;
+    }
+  }
+
+}
+
+void RadioModel::AddService(const Song::Source source) {
+
+  if (container_nodes_.contains(source)) return;
+
+  beginInsertRows(ItemToIndex(root_), static_cast<int>(root_->children.count()), static_cast<int>(root_->children.count()));
+  RadioItem *item = new RadioItem(RadioItem::Type::Service, root_);
+  item->source = source;
+  item->display_text = Song::DescriptionForSource(source);
+  item->sort_text = SortText(Song::TextForSource(source));
+  container_nodes_.insert(source, item);
+  endInsertRows();
+
+}
+
+void RadioModel::AddRadioBrowserCountries(const QStringList &countries) {
+
+  AddService(Song::Source::RadioBrowser);
+
+  for (const QString &country : countries) {
+    AddRadioBrowserCountry(country);
+  }
+
+}
+
+void RadioModel::AddRadioBrowserStates(const QString &country, const QStringList &states) {
+
+  RadioItem *country_item = AddRadioBrowserCountry(country);
+  const QString country_key = Song::TextForSource(Song::Source::RadioBrowser) + u"/country/"_s + SortText(country.trimmed().isEmpty() ? tr("Unknown country") : country.trimmed());
+  RadioItem *by_cities_item = AddGroup(country_item, country_key + u"/cities"_s, Song::Source::RadioBrowser, tr("By cities"), " cities"_L1);
+  by_cities_item->channel.country = country;
+  by_cities_item->channel.state = QString::fromLatin1(kByCitiesState);
+  ClearLoadingIndicator(by_cities_item);
+
+  for (const QString &state : states) {
+    AddRadioBrowserState(country, state);
+  }
+
+  by_cities_item->loaded = true;
+
+}
+
 void RadioModel::AddChannels(const RadioChannelList &channels) {
 
   for (const RadioChannel &channel : channels) {
-    RadioItem *container = nullptr;
-    if (container_nodes_.contains(channel.source)) {
-      container = container_nodes_.value(channel.source);
+    if (channel.source == Song::Source::RadioBrowser) {
+      AddRadioBrowserChannel(channel);
+      continue;
     }
-    else {
-      beginInsertRows(ItemToIndex(root_), static_cast<int>(root_->children.count()), static_cast<int>(root_->children.count()));
-      RadioItem *item = new RadioItem(RadioItem::Type::Service, root_);
-      item->source = channel.source;
-      item->display_text = Song::DescriptionForSource(channel.source);
-      item->sort_text = SortText(Song::TextForSource(channel.source));
-      container_nodes_.insert(channel.source, item);
-      endInsertRows();
-      container = item;
-    }
+
+    AddService(channel.source);
+    RadioItem *container = container_nodes_.value(channel.source);
     beginInsertRows(ItemToIndex(container), static_cast<int>(container->children.count()), static_cast<int>(container->children.count()));
     RadioItem *item = new RadioItem(RadioItem::Type::Channel, container);
     item->source = channel.source;
@@ -186,6 +262,91 @@ void RadioModel::AddChannels(const RadioChannelList &channels) {
     items_ << item;
     endInsertRows();
   }
+
+}
+
+RadioItem *RadioModel::AddRadioBrowserCountry(const QString &country) {
+
+  AddService(Song::Source::RadioBrowser);
+
+  const QString display_country = country.trimmed().isEmpty() ? tr("Unknown country") : country.trimmed();
+  RadioItem *service = container_nodes_.value(Song::Source::RadioBrowser);
+  const QString country_key = Song::TextForSource(Song::Source::RadioBrowser) + u"/country/"_s + SortText(display_country);
+  const bool exists = group_nodes_.contains(country_key);
+  RadioItem *country_item = AddGroup(service, country_key, Song::Source::RadioBrowser, display_country, SortText(display_country));
+  country_item->channel.country = country;
+
+  if (!exists) {
+    RadioItem *by_cities_item = AddGroup(country_item, country_key + u"/cities"_s, Song::Source::RadioBrowser, tr("By cities"), " cities"_L1);
+    by_cities_item->channel.country = country;
+    by_cities_item->channel.state = QString::fromLatin1(kByCitiesState);
+    AddLoadingIndicator(by_cities_item);
+
+    RadioItem *others_item = AddGroup(country_item, country_key + u"/others"_s, Song::Source::RadioBrowser, tr("Others"), " others"_L1);
+    others_item->channel.country = country;
+    others_item->channel.state = QString::fromLatin1(kOthersState);
+    AddLoadingIndicator(others_item);
+  }
+
+  return country_item;
+
+}
+
+RadioItem *RadioModel::AddRadioBrowserState(const QString &country, const QString &state) {
+
+  RadioItem *country_item = AddRadioBrowserCountry(country);
+
+  const QString country_key = Song::TextForSource(Song::Source::RadioBrowser) + u"/country/"_s + SortText(country.trimmed().isEmpty() ? tr("Unknown country") : country.trimmed());
+  const QString display_state = state.trimmed().isEmpty() ? tr("Unknown state") : state.trimmed();
+  const QString state_key = country_key + u"/state/"_s + SortText(display_state);
+  const bool exists = group_nodes_.contains(state_key);
+  const QString by_cities_key = country_key + u"/cities"_s;
+  RadioItem *by_cities_item = AddGroup(country_item, by_cities_key, Song::Source::RadioBrowser, tr("By cities"), " cities"_L1);
+  by_cities_item->channel.country = country;
+  by_cities_item->channel.state = QString::fromLatin1(kByCitiesState);
+  RadioItem *state_item = AddGroup(by_cities_item, state_key, Song::Source::RadioBrowser, display_state, SortText(display_state));
+  state_item->channel.country = country;
+  state_item->channel.state = state;
+
+  if (!exists) {
+    AddLoadingIndicator(state_item);
+  }
+
+  return state_item;
+
+}
+
+RadioItem *RadioModel::AddGroup(RadioItem *parent, const QString &key, const Song::Source source, const QString &display_text, const QString &sort_text) {
+
+  if (group_nodes_.contains(key)) return group_nodes_.value(key);
+
+  beginInsertRows(ItemToIndex(parent), static_cast<int>(parent->children.count()), static_cast<int>(parent->children.count()));
+  RadioItem *item = new RadioItem(RadioItem::Type::Group, parent);
+  item->source = source;
+  item->display_text = display_text;
+  item->sort_text = sort_text;
+  group_nodes_.insert(key, item);
+  endInsertRows();
+
+  return item;
+
+}
+
+void RadioModel::AddRadioBrowserChannel(const RadioChannel &channel) {
+
+  RadioItem *state_item = AddRadioBrowserState(channel.country, channel.state);
+  ClearLoadingIndicator(state_item);
+
+  beginInsertRows(ItemToIndex(state_item), static_cast<int>(state_item->children.count()), static_cast<int>(state_item->children.count()));
+  RadioItem *item = new RadioItem(RadioItem::Type::Channel, state_item);
+  item->source = channel.source;
+  item->display_text = channel.name;
+  item->sort_text = SortText(channel.name);
+  item->channel = channel;
+  items_ << item;
+  endInsertRows();
+
+  state_item->loaded = true;
 
 }
 
@@ -210,6 +371,9 @@ void RadioModel::GetChildSongs(RadioItem *item, QList<QUrl> *urls, SongList *son
 
   switch (item->type) {
     case RadioItem::Type::Service:{
+      [[fallthrough]];
+    }
+    case RadioItem::Type::Group:{
       QList<RadioItem*> children = item->children;
       std::sort(children.begin(), children.end(), std::bind(&RadioModel::CompareItems, this, std::placeholders::_1, std::placeholders::_2));
       for (RadioItem *child : children) {

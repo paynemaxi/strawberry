@@ -33,6 +33,7 @@
 #include "radiochannel.h"
 #include "somafmservice.h"
 #include "radioparadiseservice.h"
+#include "radiobrowserservice.h"
 
 using std::make_shared;
 
@@ -52,6 +53,7 @@ RadioServices::RadioServices(const SharedPtr<TaskManager> task_manager,
   backend_->moveToThread(database->thread());
 
   QObject::connect(&*backend_, &RadioBackend::NewChannels, this, &RadioServices::GotChannelsFromBackend);
+  QObject::connect(&*backend_, &RadioBackend::RadioBrowserCountries, this, &RadioServices::GotRadioBrowserCountriesFromBackend);
 
   sort_model_->setSourceModel(model_);
   sort_model_->setSortRole(RadioModel::Role_SortText);
@@ -61,6 +63,7 @@ RadioServices::RadioServices(const SharedPtr<TaskManager> task_manager,
 
   AddService(new SomaFMService(task_manager, network_, this));
   AddService(new RadioParadiseService(task_manager, network_, this));
+  AddService(new RadioBrowserService(task_manager, network_, this));
 
 }
 
@@ -70,6 +73,10 @@ void RadioServices::AddService(RadioService *service) {
   services_.insert(service->source(), service);
 
   QObject::connect(service, &RadioService::NewChannels, this, &RadioServices::GotChannelsFromService);
+  if (RadioBrowserService *radio_browser_service = qobject_cast<RadioBrowserService*>(service)) {
+    QObject::connect(radio_browser_service, &RadioBrowserService::NewCountries, this, &RadioServices::GotRadioBrowserCountries);
+    QObject::connect(radio_browser_service, &RadioBrowserService::NewStates, this, &RadioServices::GotRadioBrowserStates);
+  }
   QObject::connect(service, &RadioService::destroyed, this, &RadioServices::ServiceDeleted);
 
 }
@@ -109,6 +116,8 @@ void RadioServices::ReloadSettings() {
 void RadioServices::GetChannels() {
 
   model_->Reset();
+  AddServicesToModel();
+  backend_->GetRadioBrowserCountriesAsync();
   backend_->GetChannelsAsync();
 
 }
@@ -117,11 +126,46 @@ void RadioServices::RefreshChannels() {
 
   channels_refresh_ = true;
   model_->Reset();
+  AddServicesToModel();
   backend_->DeleteChannelsAsync();
+  backend_->DeleteRadioBrowserCountriesAsync();
 
   const QList<RadioService*> services = services_.values();
   for (RadioService *service : services) {
     service->GetChannels();
+  }
+
+}
+
+void RadioServices::GetRadioBrowserCountries() {
+
+  if (RadioBrowserService *radio_browser_service = qobject_cast<RadioBrowserService*>(ServiceBySource(Song::Source::RadioBrowser))) {
+    radio_browser_service->GetChannels();
+  }
+
+}
+
+void RadioServices::GetRadioBrowserStates(const QString &country) {
+
+  if (RadioBrowserService *service = qobject_cast<RadioBrowserService*>(ServiceBySource(Song::Source::RadioBrowser))) {
+    service->GetStates(country);
+  }
+
+}
+
+void RadioServices::GetRadioBrowserStations(const QString &country, const QString &state) {
+
+  if (RadioBrowserService *service = qobject_cast<RadioBrowserService*>(ServiceBySource(Song::Source::RadioBrowser))) {
+    service->GetStations(country, state);
+  }
+
+}
+
+void RadioServices::AddServicesToModel() {
+
+  const QList<RadioService*> services = services_.values();
+  for (RadioService *service : services) {
+    model_->AddService(service->source());
   }
 
 }
@@ -144,6 +188,37 @@ void RadioServices::GotChannelsFromService(const RadioChannelList &channels) {
   RadioService *service = qobject_cast<RadioService*>(sender());
   if (!service) return;
 
+  if (service->source() == Song::Source::RadioBrowser) {
+    model_->AddChannels(channels);
+    return;
+  }
+
   backend_->AddChannelsAsync(channels);
+
+}
+
+void RadioServices::GotRadioBrowserCountriesFromBackend(const QStringList &countries) {
+
+  if (countries.isEmpty()) {
+    if (!channels_refresh_) {
+      GetRadioBrowserCountries();
+    }
+  }
+  else {
+    model_->AddRadioBrowserCountries(countries);
+  }
+
+}
+
+void RadioServices::GotRadioBrowserCountries(const QStringList &countries) {
+
+  model_->AddRadioBrowserCountries(countries);
+  backend_->AddRadioBrowserCountriesAsync(countries);
+
+}
+
+void RadioServices::GotRadioBrowserStates(const QString &country, const QStringList &states) {
+
+  model_->AddRadioBrowserStates(country, states);
 
 }

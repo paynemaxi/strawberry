@@ -44,8 +44,11 @@ class RadioView : public AutoExpandingTreeView {
 
  Q_SIGNALS:
   void GetChannels();
+  void GetRadioBrowserStates(const QString &country);
+  void GetRadioBrowserStations(const QString &country, const QString &state);
 
  private Q_SLOTS:
+  void ItemExpanded(const QModelIndex &idx);
   void AddToPlaylist();
   void ReplacePlaylist();
   void OpenInNewPlaylist();
