@@ -780,6 +780,7 @@ set(SOURCES
   src/radios/radiochannel.cpp
   src/radios/somafmservice.cpp
   src/radios/radioparadiseservice.cpp
+  src/radios/radiobrowserservice.cpp
   src/radios/radiomimedata.cpp
 
   src/scrobbler/audioscrobbler.cpp
@@ -1077,6 +1078,7 @@ set(HEADERS
   src/radios/radiomimedata.h
   src/radios/somafmservice.h
   src/radios/radioparadiseservice.h
+  src/radios/radiobrowserservice.h
 
   src/scrobbler/audioscrobbler.h
   src/scrobbler/scrobblersettingsservice.h

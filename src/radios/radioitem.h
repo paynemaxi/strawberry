@@ -33,6 +33,7 @@ class RadioItem : public SimpleTreeItem<RadioItem> {
     LoadingIndicator,
     Root,
     Service,
+    Group,
     Channel
   };
 
@@ -42,6 +43,7 @@ class RadioItem : public SimpleTreeItem<RadioItem> {
   Type type;
   Song::Source source;
   RadioChannel channel;
+  bool loaded = false;
 
  private:
   Q_DISABLE_COPY(RadioItem)

@@ -22,6 +22,7 @@
 
 #include <QObject>
 #include <QMap>
+#include <QStringList>
 
 #include "includes/shared_ptr.h"
 #include "core/song.h"
@@ -66,10 +67,21 @@ class RadioServices : public QObject {
   void ServiceDeleted();
   void GotChannelsFromBackend(const RadioChannelList &channels);
   void GotChannelsFromService(const RadioChannelList &channels);
+  void GotRadioBrowserCountriesFromBackend(const QStringList &countries);
 
  public Q_SLOTS:
   void GetChannels();
   void RefreshChannels();
+  void GetRadioBrowserStates(const QString &country);
+  void GetRadioBrowserStations(const QString &country, const QString &state);
+
+ private:
+  void AddServicesToModel();
+  void GetRadioBrowserCountries();
+
+ private Q_SLOTS:
+  void GotRadioBrowserCountries(const QStringList &countries);
+  void GotRadioBrowserStates(const QString &country, const QStringList &states);
 
  private:
   const SharedPtr<NetworkAccessManager> network_;

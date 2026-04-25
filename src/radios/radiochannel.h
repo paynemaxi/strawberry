@@ -34,6 +34,8 @@ struct RadioChannel {
   QString name;
   QUrl url;
   QUrl thumbnail_url;
+  QString country;
+  QString state;
 
   Song ToSong() const;
 };
